@@ -1,6 +1,7 @@
 
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -13,18 +14,20 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
 /**
- * Servlet implementation class delete_soldier
+ * Servlet implementation class get_offices
  */
-@WebServlet("/delete_soldier")
-public class delete_soldier extends HttpServlet {
+@WebServlet("/get_offices")
+public class get_offices extends HttpServlet {
 	private static final long serialVersionUID = 1L;
+       
     /**
      * @see HttpServlet#HttpServlet()
      */
-    public delete_soldier() {
+    public get_offices() {
         super();
         // TODO Auto-generated constructor stub
     }
@@ -41,9 +44,13 @@ public class delete_soldier extends HttpServlet {
 	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		final String URL = "jdbc:mysql://222.200.180.59:9000/MBDB?useSSL=false";
+		final String URL = "jdbc:mysql://222.200.180.59:9000/MBDB?useSSL=false&characterEncoding=UTF-8";
 		final String USER = "mbcsdev";
 	    final String PASSWORD = "mbcsdev2018";
+	    JSONArray result = new JSONArray();
+	    JSONObject resultjson = new JSONObject();
+	    PrintWriter out = response.getWriter();
+	    int count = 0;
 	    try {
 			Class.forName("com.mysql.jdbc.Driver");		//注册驱动
 		} catch (ClassNotFoundException e) {
@@ -51,7 +58,6 @@ public class delete_soldier extends HttpServlet {
 			e.printStackTrace();
 			response.sendError(500, "JDBC initialization failed");
 		}
-		request.setCharacterEncoding("UTF-8");
 		String acceptjson = "";
 		Connection conn;
 		System.out.println("连接服务器……");
@@ -60,34 +66,40 @@ public class delete_soldier extends HttpServlet {
 			Statement stmt = conn.createStatement();
 			acceptjson = request.getParameter("data");		//获得json数据
 			if (!acceptjson.equals("")) {
-				response.setContentType("application/json; charset=utf-8");		//设置相应头的数据类型
+				request.setCharacterEncoding("UTF-8");
+				response.setHeader("Content-type", "application/json; charset=utf-8");
+				response.setCharacterEncoding("utf-8");
 				JSONObject jb = JSONObject.fromObject(acceptjson);		//转换为JSONObject
-				int soldier_id = jb.getInt("soldier_id");
-				ResultSet rs1 = stmt.executeQuery("SELECT * FROM OrgAdminRelationships WHERE leader_sid=" + soldier_id);		//检查民兵是否是负责人
-				if (rs1.next()) {
-					response.sendError(403, "Cannot operate on leaders");
+				String office_id = jb.getString("office_id");
+				ResultSet rs = stmt.executeQuery("SELECT * FROM Offices WHERE office_id = " + office_id);
+				if (!rs.next()) {
+					response.sendError(400, "The office does not exist");
 				}
-				rs1.close();
-				ResultSet rs = stmt.executeQuery("SELECT * FROM Soldiers WHERE soldier_id=" + soldier_id);		//查询民兵是否存在
-				if (rs.next()) {
-					stmt.executeUpdate("DELETE FROM OrgSoldierRelationships WHERE soldier_id=" + soldier_id);
-					stmt.executeUpdate("DELETE FROM SoldierRelationships WHERE lower_sid=" + soldier_id + " or " + "higher_sid=" + soldier_id);
-					stmt.executeUpdate("UPDATE Soldiers SET serve_office_id = 4 WHERE soldier_id = " + soldier_id);
-				} else {
-					response.sendError(400, "User does not exist");
+				rs = stmt.executeQuery("SELECT * FROM Offices WHERE office_id != " + office_id + " and higher_office_id = " + office_id);
+				while(rs.next()) {
+					count++;
+					String result_office_id = rs.getString("office_id");
+					String office_level = rs.getString("office_level");
+					String higher_office_id = rs.getString("higher_office_id");
+					String result_name = rs.getString("name");
+					JSONObject item = new JSONObject();
+					item.put("office_id", result_office_id);
+					item.put("office_level", office_level);
+					item.put("higher_office_id", higher_office_id);
+					item.put("name", result_name);
+					result.put(item);
 				}
-				rs.close();
+				resultjson.put("total", count);
+				resultjson.put("reslut", result);
+				out.write(resultjson.toString());
 			} else {
 				response.sendError(400, "no input");
 			}
-			stmt.close();
-			conn.close();
 		} catch (SQLException e) {
 			// TODO 自动生成的 catch 块
 			e.printStackTrace();
 			response.sendError(400, "Invalid input value");
 		}
-		
 	}
 
 }

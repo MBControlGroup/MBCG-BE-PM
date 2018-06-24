@@ -16,15 +16,16 @@ import javax.servlet.http.HttpServletResponse;
 import net.sf.json.JSONObject;
 
 /**
- * Servlet implementation class delete_soldier
+ * Servlet implementation class update_soldier
  */
-@WebServlet("/delete_soldier")
-public class delete_soldier extends HttpServlet {
+@WebServlet("/update_soldier")
+public class update_soldier extends HttpServlet {
 	private static final long serialVersionUID = 1L;
+       
     /**
      * @see HttpServlet#HttpServlet()
      */
-    public delete_soldier() {
+    public update_soldier() {
         super();
         // TODO Auto-generated constructor stub
     }
@@ -41,7 +42,7 @@ public class delete_soldier extends HttpServlet {
 	 * @see HttpServlet#doPost(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		final String URL = "jdbc:mysql://222.200.180.59:9000/MBDB?useSSL=false";
+		final String URL = "jdbc:mysql://222.200.180.59:9000/MBDB?useSSL=false&characterEncoding=UTF-8";
 		final String USER = "mbcsdev";
 	    final String PASSWORD = "mbcsdev2018";
 	    try {
@@ -51,7 +52,6 @@ public class delete_soldier extends HttpServlet {
 			e.printStackTrace();
 			response.sendError(500, "JDBC initialization failed");
 		}
-		request.setCharacterEncoding("UTF-8");
 		String acceptjson = "";
 		Connection conn;
 		System.out.println("连接服务器……");
@@ -60,28 +60,41 @@ public class delete_soldier extends HttpServlet {
 			Statement stmt = conn.createStatement();
 			acceptjson = request.getParameter("data");		//获得json数据
 			if (!acceptjson.equals("")) {
-				response.setContentType("application/json; charset=utf-8");		//设置相应头的数据类型
+				request.setCharacterEncoding("UTF-8");
+				//设置相应头的数据类型
 				JSONObject jb = JSONObject.fromObject(acceptjson);		//转换为JSONObject
-				int soldier_id = jb.getInt("soldier_id");
-				ResultSet rs1 = stmt.executeQuery("SELECT * FROM OrgAdminRelationships WHERE leader_sid=" + soldier_id);		//检查民兵是否是负责人
-				if (rs1.next()) {
-					response.sendError(403, "Cannot operate on leaders");
-				}
-				rs1.close();
-				ResultSet rs = stmt.executeQuery("SELECT * FROM Soldiers WHERE soldier_id=" + soldier_id);		//查询民兵是否存在
-				if (rs.next()) {
-					stmt.executeUpdate("DELETE FROM OrgSoldierRelationships WHERE soldier_id=" + soldier_id);
-					stmt.executeUpdate("DELETE FROM SoldierRelationships WHERE lower_sid=" + soldier_id + " or " + "higher_sid=" + soldier_id);
-					stmt.executeUpdate("UPDATE Soldiers SET serve_office_id = 4 WHERE soldier_id = " + soldier_id);
+				String update_obj = jb.getString("update_obj");
+				String soldier_id = jb.getString("soldier_id");
+				String key = jb.getString("key");
+				System.out.println(update_obj + " " + soldier_id + " " + key);
+				if (update_obj.equals("rank")) {
+					if (key.equals("SD") || key.equals("CM")) {
+						stmt.executeUpdate("UPDATE Soldiers SET " + update_obj + " = '" + key + "'" + " WHERE soldier_id = " + soldier_id);
+					} else {
+						response.sendError(400, "Invalid input value");
+					}
+				} else if (update_obj.equals("name") || update_obj.equals("phone_num")) {
+					stmt.executeUpdate("UPDATE Soldiers SET " + update_obj + " = '" + key + "'" + " WHERE soldier_id = " + soldier_id);
+				} else if (update_obj.equals("serve_office_id")) {
+					stmt.executeUpdate("UPDATE Soldiers SET " + update_obj + " =" + key + " WHERE soldier_id = " + soldier_id);
+				} else if (update_obj.equals("serve_org_id")) {
+					ResultSet rs = stmt.executeQuery("SELECT * FROM OrgSoldierRelationships WHERE soldier_id = " + soldier_id);
+					int count = 0;
+					while (rs.next()) {
+						count ++;
+					}
+					if (count == 1) {
+						stmt.executeUpdate("UPDATE OrgSoldierRelationships SET " + update_obj + " = " + key + " WHERE soldier_id = " + soldier_id);
+					} else {
+						response.sendError(403, "Cannot operate on soldier who belongs to multiple organizations");
+					}
 				} else {
-					response.sendError(400, "User does not exist");
+					response.sendError(400, "Invalid input value");
 				}
-				rs.close();
+				
 			} else {
 				response.sendError(400, "no input");
 			}
-			stmt.close();
-			conn.close();
 		} catch (SQLException e) {
 			// TODO 自动生成的 catch 块
 			e.printStackTrace();
